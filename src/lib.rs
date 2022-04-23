@@ -1,5 +1,6 @@
 use colored::Colorize;
 use itertools::Itertools;
+use goblin::error::Result;
 use goblin::pe::{Coff, symbol::Symbol};
 
 /// Image file machine constants (winnt.h)
@@ -69,6 +70,30 @@ static WIN32_MODULES: &[&str] = &[
     "WINSRV",
     "WININET",
 ];
+
+pub struct Bof<'a>(Coff<'a>);
+
+impl<'a> Bof<'a> {
+    pub fn parse(buffer: &'a [u8]) -> Result<Self> {
+        Coff::parse(buffer).map(|coff| Self(coff))
+    }
+
+    pub fn imports(&self) -> impl Iterator<Item=Symbol> + '_ {
+        self.0.symbols.iter()
+            .map(|tuple| { tuple.2 })
+            .filter(move |s| {
+                s.name(&self.0.strings).unwrap().starts_with(self.import_prefix())
+            })
+    }
+
+    fn import_prefix(&self) -> &str {
+        match self.0.header.machine {
+            IMAGE_FILE_MACHINE_I386 => "__imp__",
+            IMAGE_FILE_MACHINE_AMD64 => "__imp_",
+            _ => panic!("Unsupported machine type")
+        }
+    }
+}
 
 pub fn parse(buffer: &[u8]) {
     match Coff::parse(buffer) {
