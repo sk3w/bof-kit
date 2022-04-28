@@ -9,6 +9,10 @@ const IMAGE_FILE_MACHINE_I386: u16 = 0x014c;
 const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
 const IMAGE_FILE_MACHINE_ARM64: u16 = 0xaa64;
 
+/// Exported entrypoint for CS Beacon BOFs
+/// https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/content/topics/beacon-object-files_main.htm
+const BEACON_ENTRYPOINT: &'static str = "go";
+
 /// Exported functions supplied by Beacon (Cobalt Strike 4.1)
 /// https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/content/beacon.h
 static BEACON_EXPORTS: &[&str] = &[
@@ -140,6 +144,7 @@ fn get_imports<'a>(coff: &'a Coff) -> impl Iterator<Item=Symbol> + 'a {
 
 fn check_all(coff: &Coff) {
     check_arch(coff);
+    check_entrypoint(coff);
     check_imports(coff);
 }
 
@@ -151,6 +156,18 @@ fn check_arch(coff: &Coff) {
         _ => panic!("Unsupported machine type")
     };
     println!("[+] machine arch: {}", &arch);
+}
+
+fn check_entrypoint(coff: &Coff) -> () {
+    match coff.symbols.iter()
+        .map(|tuple| { tuple.2.name(&coff.strings)
+            .expect("Unable to read symbol name")
+            .to_string()
+        })
+        .any(|s| s.eq(BEACON_ENTRYPOINT)) {
+            true => println!("[+] entrypoint: {}()", BEACON_ENTRYPOINT),
+            false => println!("{} {}", "[!] entrypoint not found:".bold().red(), BEACON_ENTRYPOINT.bold().red()),
+        }
 }
 
 fn check_imports(coff: &Coff) {
